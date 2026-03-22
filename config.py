@@ -28,7 +28,6 @@ def get(key):
 
 
 def render_sidebar_fields():
-    # disable browser autofill on all inputs
     st.markdown(
         """<script>
         document.addEventListener('DOMContentLoaded', function() {
