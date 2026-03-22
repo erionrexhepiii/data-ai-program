@@ -28,6 +28,24 @@ def get(key):
 
 
 def render_sidebar_fields():
+    # disable browser autofill on all inputs
+    st.markdown(
+        """<script>
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('input').forEach(function(el) {
+                el.setAttribute('autocomplete', 'off');
+            });
+        });
+        // also catch inputs added later by Streamlit
+        new MutationObserver(function(mutations) {
+            document.querySelectorAll('input').forEach(function(el) {
+                el.setAttribute('autocomplete', 'off');
+            });
+        }).observe(document.body, {childList: true, subtree: true});
+        </script>""",
+        unsafe_allow_html=True,
+    )
+
     for key, meta in _FIELDS.items():
         if meta["type"] == "password":
             st.session_state[key] = st.text_input(
@@ -36,6 +54,7 @@ def render_sidebar_fields():
                 type="password",
                 placeholder=meta["placeholder"],
                 key=f"input_{key}",
+                autocomplete="off",
             )
         else:
             st.session_state[key] = st.text_input(
@@ -43,6 +62,7 @@ def render_sidebar_fields():
                 value=st.session_state.get(key, ""),
                 placeholder=meta["placeholder"],
                 key=f"input_{key}",
+                autocomplete="off",
             )
 
 
