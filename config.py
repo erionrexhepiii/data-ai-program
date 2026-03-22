@@ -1,8 +1,5 @@
-"""Configuration management — all credentials live in st.session_state only."""
-
 import streamlit as st
 
-# Keys used in session_state
 _FIELDS = {
     "workspace_url": {"label": "Databricks Workspace URL", "placeholder": "https://adb-xxxxx.azuredatabricks.net", "type": "text"},
     "token": {"label": "Databricks Access Token", "placeholder": "dapi...", "type": "password"},
@@ -12,8 +9,7 @@ _FIELDS = {
 }
 
 
-def init_session_state() -> None:
-    """Ensure every config key exists in session_state (empty string default)."""
+def init_session_state():
     for key in _FIELDS:
         if key not in st.session_state:
             st.session_state[key] = ""
@@ -27,13 +23,11 @@ def init_session_state() -> None:
         st.session_state["mode"] = "SQL"
 
 
-def get(key: str) -> str:
-    """Read a config value from session_state."""
+def get(key):
     return st.session_state.get(key, "")
 
 
-def render_sidebar_fields() -> None:
-    """Render the credential input fields in the sidebar and persist on change."""
+def render_sidebar_fields():
     for key, meta in _FIELDS.items():
         if meta["type"] == "password":
             st.session_state[key] = st.text_input(
@@ -52,16 +46,13 @@ def render_sidebar_fields() -> None:
             )
 
 
-def has_sql_config() -> bool:
-    """Return True if the minimum config for SQL execution is present."""
+def has_sql_config():
     return bool(get("workspace_url") and get("token") and get("warehouse_id"))
 
 
-def has_pyspark_config() -> bool:
-    """Return True if the minimum config for PySpark execution is present."""
+def has_pyspark_config():
     return bool(get("workspace_url") and get("token") and get("cluster_id"))
 
 
-def has_claude_config() -> bool:
-    """Return True if the Claude API key is set."""
+def has_claude_config():
     return bool(get("claude_api_key"))

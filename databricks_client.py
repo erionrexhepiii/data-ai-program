@@ -1,33 +1,32 @@
-"""Databricks REST API integration for SQL, PySpark execution, and metadata."""
-
 from __future__ import annotations
-
 import time
 from urllib.parse import quote
-
 import requests
 
 _MAX_POLL = 120
-_POLL_INTERVAL = 2  # seconds
+_POLL_INTERVAL = 2
 
 
-# ─── Helpers ─────────────────────────────────────────────────────────────────
-
-def _base(workspace_url: str) -> str:
+def _base(workspace_url):
     return workspace_url.rstrip("/")
 
 
-def _headers(token: str) -> dict:
+def _headers(token):
     return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
 
-# ─── Test Connection ─────────────────────────────────────────────────────────
+def _is_json(r):
+    return "json" in r.headers.get("content-type", "")
 
-def test_connection(workspace_url: str, token: str, warehouse_id: str) -> dict:
-    """GET /api/2.0/sql/warehouses/{id} — returns {"name": …, "state": …}.
 
-    Raises ``RuntimeError`` with a human-readable message on failure.
-    """
+def _extract_error(r):
+    if _is_json(r):
+        body = r.json()
+        return body.get("message") or body.get("error") or ""
+    return ""
+
+
+def test_connection(workspace_url, token, warehouse_id):
     url = f"{_base(workspace_url)}/api/2.0/sql/warehouses/{quote(warehouse_id)}"
     r = requests.get(url, headers=_headers(token), timeout=15)
 
@@ -43,19 +42,7 @@ def test_connection(workspace_url: str, token: str, warehouse_id: str) -> dict:
     return {"name": data.get("name", ""), "state": data.get("state", "OK")}
 
 
-# ─── SQL Execution ──────────────────────────────────────────────────────────
-
-def execute_sql(
-    workspace_url: str,
-    token: str,
-    warehouse_id: str,
-    sql: str,
-) -> dict:
-    """Execute a SQL statement via POST /api/2.0/sql/statements.
-
-    Returns ``{"columns": [...], "rows": [[...], ...], "row_count": int}``.
-    Raises ``RuntimeError`` on failure.
-    """
+def execute_sql(workspace_url, token, warehouse_id, sql):
     base = _base(workspace_url)
     hdrs = _headers(token)
 
@@ -77,7 +64,6 @@ def execute_sql(
 
     data = r.json()
 
-    # Poll while pending / running
     attempts = 0
     while data.get("status", {}).get("state") in ("PENDING", "RUNNING"):
         if attempts >= _MAX_POLL:
@@ -103,28 +89,11 @@ def execute_sql(
     return {"columns": columns, "rows": rows, "row_count": len(rows)}
 
 
-# ─── PySpark Execution ──────────────────────────────────────────────────────
-
-def execute_pyspark(
-    workspace_url: str,
-    token: str,
-    cluster_id: str,
-    code: str,
-) -> dict:
-    """Execute PySpark code via the Databricks Commands API.
-
-    1. POST /api/1.2/contexts/create
-    2. POST /api/1.2/commands/execute
-    3. Poll GET /api/1.2/commands/status
-    4. POST /api/1.2/contexts/destroy (best-effort)
-
-    Returns ``{"columns": [...], "rows": [[...], ...], "row_count": int}``.
-    Raises ``RuntimeError`` on failure.
-    """
+def execute_pyspark(workspace_url, token, cluster_id, code):
     base = _base(workspace_url)
     hdrs = _headers(token)
 
-    # 1. Create execution context
+    # create execution context
     r = requests.post(
         f"{base}/api/1.2/contexts/create",
         headers=hdrs,
@@ -137,7 +106,7 @@ def execute_pyspark(
     context_id = r.json().get("id")
 
     try:
-        # 2. Execute command
+        # run the command
         r = requests.post(
             f"{base}/api/1.2/commands/execute",
             headers=hdrs,
@@ -156,7 +125,7 @@ def execute_pyspark(
         command_id = r.json().get("id")
         status = r.json()
 
-        # 3. Poll for results
+        # poll until done
         attempts = 0
         while status.get("status") not in ("Finished", "Error", "Cancelled"):
             if attempts >= _MAX_POLL:
@@ -182,7 +151,6 @@ def execute_pyspark(
             cause = results.get("cause") or results.get("summary") or "PySpark execution failed."
             raise RuntimeError(cause)
 
-        # Parse results
         results = status.get("results", {})
         result_type = results.get("resultType")
         result_data = results.get("data")
@@ -202,7 +170,7 @@ def execute_pyspark(
         }
 
     finally:
-        # 4. Destroy context (best-effort)
+        # cleanup context
         try:
             requests.post(
                 f"{base}/api/1.2/contexts/destroy",
@@ -214,19 +182,11 @@ def execute_pyspark(
             pass
 
 
-# ─── Schema Loading ─────────────────────────────────────────────────────────
-
-def load_schema(workspace_url: str, token: str) -> list[dict]:
-    """Fetch table metadata from Unity Catalog.
-
-    Returns a list of dicts: ``[{"full_name": …, "columns": [{"name": …, "type_name": …}]}]``
-    Raises ``RuntimeError`` on failure.
-    """
+def load_schema(workspace_url, token):
     base = _base(workspace_url)
     hdrs = _headers(token)
-    all_tables: list[dict] = []
+    all_tables = []
 
-    # Fetch catalogs
     r = requests.get(f"{base}/api/2.1/unity-catalog/catalogs", headers=hdrs, timeout=15)
     if not r.ok:
         raise RuntimeError(
@@ -277,17 +237,3 @@ def load_schema(workspace_url: str, token: str) -> list[dict]:
                 })
 
     return all_tables
-
-
-# ─── Internal utilities ─────────────────────────────────────────────────────
-
-def _is_json(r: requests.Response) -> bool:
-    ct = r.headers.get("content-type", "")
-    return "json" in ct
-
-
-def _extract_error(r: requests.Response) -> str:
-    if _is_json(r):
-        body = r.json()
-        return body.get("message") or body.get("error") or ""
-    return ""

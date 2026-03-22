@@ -1,12 +1,6 @@
-"""Shared helpers used across the Databricks AI Assistant."""
-
 import re
 
-# ─── Dangerous keyword detection ────────────────────────────────────────────
-
-_DANGEROUS_SQL = re.compile(
-    r"\b(DELETE|DROP|TRUNCATE|UPDATE|ALTER)\b", re.IGNORECASE
-)
+_DANGEROUS_SQL = re.compile(r"\b(DELETE|DROP|TRUNCATE|UPDATE|ALTER)\b", re.IGNORECASE)
 
 _DANGEROUS_PYSPARK = re.compile(
     r"(\.drop\s*\(|\.delete\s*\(|\btruncate\b|\.write\.mode\s*\(\s*[\"']overwrite[\"']\s*\))"
@@ -15,8 +9,7 @@ _DANGEROUS_PYSPARK = re.compile(
 )
 
 
-def is_dangerous(code: str, mode: str = "sql") -> bool:
-    """Return True if *code* contains destructive keywords for the given mode."""
+def is_dangerous(code, mode="sql"):
     if _DANGEROUS_SQL.search(code):
         return True
     if mode == "pyspark" and _DANGEROUS_PYSPARK.search(code):
@@ -24,8 +17,7 @@ def is_dangerous(code: str, mode: str = "sql") -> bool:
     return False
 
 
-def dangerous_keyword(code: str, mode: str = "sql") -> str | None:
-    """Return the first dangerous keyword found, or None."""
+def dangerous_keyword(code, mode="sql"):
     m = _DANGEROUS_SQL.search(code)
     if m:
         return m.group(0).upper()
@@ -36,13 +28,10 @@ def dangerous_keyword(code: str, mode: str = "sql") -> str | None:
     return None
 
 
-# ─── Schema formatting ──────────────────────────────────────────────────────
-
-def format_schema_for_prompt(schema: list[dict]) -> str | None:
-    """Format a list of table dicts into a text block for the Claude system prompt."""
+def format_schema_for_prompt(schema):
     if not schema:
         return None
-    lines: list[str] = []
+    lines = []
     for tbl in schema:
         cols = "\n".join(
             f"  - {c['name']} ({c.get('type_name') or c.get('type_text') or 'unknown'})"
@@ -52,10 +41,7 @@ def format_schema_for_prompt(schema: list[dict]) -> str | None:
     return "\n\n".join(lines)
 
 
-# ─── Code cleanup ───────────────────────────────────────────────────────────
-
-def strip_markdown_fences(text: str) -> str:
-    """Remove markdown code fences that Claude may add despite instructions."""
+def strip_markdown_fences(text):
     text = re.sub(r"^```(?:sql|pyspark|python)?\s*\n?", "", text, flags=re.IGNORECASE)
     text = re.sub(r"\n?```\s*$", "", text, flags=re.IGNORECASE)
     return text.strip()

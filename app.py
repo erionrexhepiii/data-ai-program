@@ -1,14 +1,11 @@
-"""Databricks AI Assistant — Streamlit application entry point."""
-
 import streamlit as st
 import pandas as pd
+from datetime import datetime
 
 import config
 import claude_client
 import databricks_client
 from utils import is_dangerous, dangerous_keyword
-
-# ─── Page config ─────────────────────────────────────────────────────────────
 
 st.set_page_config(
     page_title="Databricks AI Assistant",
@@ -16,14 +13,11 @@ st.set_page_config(
     layout="wide",
 )
 
-# ─── Session state initialization ───────────────────────────────────────────
-
 config.init_session_state()
 
 MAX_HISTORY = 10
 
-# ─── Sidebar — Configuration ────────────────────────────────────────────────
-
+# sidebar
 with st.sidebar:
     st.title("⚡ Databricks Assistant")
     st.caption("Powered by Claude")
@@ -31,7 +25,6 @@ with st.sidebar:
     with st.expander("🔧 Configuration", expanded=not config.has_sql_config()):
         config.render_sidebar_fields()
 
-    # ── Test Connection button ───────────────────────────────────────────
     col_test, col_schema = st.columns(2)
 
     with col_test:
@@ -53,7 +46,6 @@ with st.sidebar:
                     except Exception as e:
                         st.error(f"Connection failed: {e}")
 
-    # ── Load Schema button ───────────────────────────────────────────────
     with col_schema:
         if st.button("📂 Load Schema", use_container_width=True):
             if not (config.get("workspace_url") and config.get("token")):
@@ -70,7 +62,6 @@ with st.sidebar:
                     except Exception as e:
                         st.error(f"Schema load failed: {e}")
 
-    # ── Schema viewer ────────────────────────────────────────────────────
     if st.session_state.get("schema"):
         schema = st.session_state["schema"]
         with st.expander(f"📋 Loaded Schema ({len(schema)} tables)"):
@@ -82,11 +73,9 @@ with st.sidebar:
                 else:
                     st.caption("No columns found")
 
-# ─── Main Panel ─────────────────────────────────────────────────────────────
-
+# main panel
 st.markdown("## 💬 Ask your database anything")
 
-# ── Mode toggle ──────────────────────────────────────────────────────────
 mode = st.radio(
     "Execution mode",
     options=["SQL", "PySpark"],
@@ -95,21 +84,15 @@ mode = st.radio(
     key="mode_radio",
 )
 st.session_state["mode"] = mode
-mode_label = mode  # "SQL" or "PySpark"
+mode_label = mode
 
-# ── Natural language input ───────────────────────────────────────────────
 user_prompt = st.text_area(
     "Describe what you need in plain English",
-    placeholder=(
-        'Examples: "Show me the top 10 customers by revenue", '
-        '"Count orders placed last month", '
-        '"Delete all records where status is inactive"'
-    ),
+    placeholder='Examples: "Show me the top 10 customers by revenue", "Count orders placed last month"',
     height=100,
     key="user_prompt",
 )
 
-# ── Generate button ──────────────────────────────────────────────────────
 if st.button(f"🚀 Generate {mode_label}", type="primary", disabled=not user_prompt.strip()):
     if not config.has_claude_config():
         st.error("Please set your Claude API key in the sidebar.")
@@ -127,7 +110,7 @@ if st.button(f"🚀 Generate {mode_label}", type="primary", disabled=not user_pr
                 st.error(f"Claude API error: {e}")
                 st.session_state["generated_code"] = ""
 
-# ── Code preview & execution ─────────────────────────────────────────────
+# code preview and execution
 if st.session_state.get("generated_code"):
     st.markdown(f"### 📝 Generated {mode_label}")
     st.caption("You can edit the code below before executing.")
@@ -139,10 +122,8 @@ if st.session_state.get("generated_code"):
         key="code_editor",
         label_visibility="collapsed",
     )
-    # Keep edits in sync
     st.session_state["generated_code"] = edited_code
 
-    # Dangerous-keyword guard
     dangerous = is_dangerous(edited_code, mode.lower())
     confirmed = True
 
@@ -162,7 +143,6 @@ if st.session_state.get("generated_code"):
     with col_exec:
         execute_disabled = (dangerous and not confirmed) or not edited_code.strip()
         if st.button("▶️ Execute", type="primary", disabled=execute_disabled, use_container_width=True):
-            # Validate config for the active mode
             if mode == "SQL" and not config.has_sql_config():
                 st.error("Please configure Databricks Workspace URL, Token, and Warehouse ID.")
             elif mode == "PySpark" and not config.has_pyspark_config():
@@ -186,20 +166,14 @@ if st.session_state.get("generated_code"):
                             )
 
                         row_count = result["row_count"]
-                        st.success(
-                            f"Query executed successfully — "
-                            f"{row_count} row{'s' if row_count != 1 else ''} returned"
-                        )
+                        st.success(f"Query executed successfully — {row_count} row{'s' if row_count != 1 else ''} returned")
 
-                        # Display results as dataframe
                         if result["columns"]:
                             df = pd.DataFrame(result["rows"], columns=result["columns"])
                             st.dataframe(df, use_container_width=True)
                         else:
                             st.info("Query executed successfully. No rows returned.")
 
-                        # Save to history
-                        from datetime import datetime
                         entry = {
                             "prompt": user_prompt.strip(),
                             "code": edited_code,
@@ -214,8 +188,6 @@ if st.session_state.get("generated_code"):
                     except Exception as e:
                         st.error(f"Execution error: {e}")
 
-                        # Save failed query to history
-                        from datetime import datetime
                         entry = {
                             "prompt": user_prompt.strip(),
                             "code": edited_code,
@@ -232,8 +204,7 @@ if st.session_state.get("generated_code"):
             st.session_state["generated_code"] = ""
             st.rerun()
 
-# ─── Query History ───────────────────────────────────────────────────────────
-
+# query history
 history = st.session_state.get("query_history", [])
 if history:
     with st.expander(f"📜 Query History (last {len(history)})", expanded=False):
