@@ -1,18 +1,22 @@
+import os
 import streamlit as st
+from dotenv import load_dotenv
+
+load_dotenv()
 
 _FIELDS = {
-    "workspace_url": {"label": "Databricks Workspace URL", "placeholder": "https://adb-xxxxx.azuredatabricks.net", "type": "text"},
-    "token": {"label": "Databricks Access Token", "placeholder": "dapi...", "type": "password"},
-    "warehouse_id": {"label": "SQL Warehouse ID", "placeholder": "e.g. abc123def456", "type": "text"},
-    "cluster_id": {"label": "Cluster ID (required for PySpark)", "placeholder": "e.g. 0123-456789-abcde123", "type": "text"},
-    "claude_api_key": {"label": "Claude API Key", "placeholder": "sk-ant-...", "type": "password"},
+    "workspace_url": {"label": "Databricks Workspace URL", "placeholder": "https://adb-xxxxx.azuredatabricks.net", "type": "text", "env": "DATABRICKS_WORKSPACE_URL"},
+    "token": {"label": "Databricks Access Token", "placeholder": "dapi...", "type": "password", "env": "DATABRICKS_TOKEN"},
+    "warehouse_id": {"label": "SQL Warehouse ID", "placeholder": "e.g. abc123def456", "type": "text", "env": "DATABRICKS_WAREHOUSE_ID"},
+    "cluster_id": {"label": "Cluster ID (required for PySpark)", "placeholder": "e.g. 0123-456789-abcde123", "type": "text", "env": "DATABRICKS_CLUSTER_ID"},
+    "claude_api_key": {"label": "Claude API Key", "placeholder": "sk-ant-...", "type": "password", "env": "ANTHROPIC_API_KEY"},
 }
 
 
 def init_session_state():
-    for key in _FIELDS:
+    for key, meta in _FIELDS.items():
         if key not in st.session_state:
-            st.session_state[key] = ""
+            st.session_state[key] = os.getenv(meta["env"], "")
     if "query_history" not in st.session_state:
         st.session_state["query_history"] = []
     if "schema" not in st.session_state:
@@ -28,6 +32,7 @@ def get(key):
 
 
 def render_sidebar_fields():
+    # disable browser autofill on all inputs
     st.markdown(
         """<script>
         document.addEventListener('DOMContentLoaded', function() {

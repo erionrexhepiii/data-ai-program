@@ -1,8 +1,8 @@
 import anthropic
 from utils import format_schema_for_prompt, strip_markdown_fences
 
-MODEL = "claude-sonnet-4-20250514"
-MAX_TOKENS = 2048
+MODEL = "claude-opus-4-7"
+MAX_TOKENS = 16000
 
 # language prompts - just add a new key here for other languages later
 LANGUAGE_PROMPTS = {
@@ -61,12 +61,15 @@ def _build_system_prompt(mode, schema=None):
 def generate_code(api_key, user_message, mode="SQL", schema=None):
     client = anthropic.Anthropic(api_key=api_key)
 
+    system_prompt = _build_system_prompt(mode, schema)
+
     message = client.messages.create(
         model=MODEL,
         max_tokens=MAX_TOKENS,
-        system=_build_system_prompt(mode, schema),
+        thinking={"type": "adaptive"},
+        system=[{"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}}],
         messages=[{"role": "user", "content": user_message}],
     )
 
-    text = message.content[0].text if message.content else ""
+    text = next((b.text for b in message.content if b.type == "text"), "")
     return strip_markdown_fences(text)

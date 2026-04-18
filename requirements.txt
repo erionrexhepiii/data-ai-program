@@ -2,3 +2,4 @@ streamlit
 anthropic
 requests
 pandas
+python-dotenv
